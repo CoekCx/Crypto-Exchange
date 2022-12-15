@@ -1,0 +1,386 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "description": "DRS Project for Group 1",
+    "version": "1.0.0",
+    "title": "DRS-Group-1-Python-Flask"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "User Requests",
+      "description": "Example API for user related requests"
+    },
+    {
+      "name": "Transaction Requests",
+      "description": "Example API for transaction related requests"
+    }
+  ],
+  "paths": {
+    "/user/login": {
+      "post": {
+        "tags": [
+          "User Requests"
+        ],
+        "summary": "Log into the website",
+        "requestBody": {
+          "description": "",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "",
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/components/schemas/User"
+            }
+          },
+          "401": {
+            "description": "Unauthorised"
+          }
+        }
+      }
+    },
+    "/user/logout": {
+      "post": {
+        "tags": [
+          "User Requests"
+        ],
+        "summary": "Log out of the website",
+        "requestBody": {
+          "description": "",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "",
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorised"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "is_verified": {
+            "type": "boolean",
+            "default": false
+          },
+          "name": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "last_name": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "address": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "city": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "country": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "phone_number": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "nullable": false
+          },
+          "password": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          }
+        }
+      },
+      "Wallet": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "usd_balance": {
+            "type": "number",
+            "format": "float",
+            "default": 0
+          },
+          "btc_balance": {
+            "type": "number",
+            "format": "float",
+            "default": 0
+          },
+          "btc_is_active": {
+            "type": "boolean",
+            "default": true
+          },
+          "eth_balance": {
+            "type": "number",
+            "format": "float",
+            "default": 0
+          },
+          "eth_is_active": {
+            "type": "boolean",
+            "default": true
+          },
+          "xrp_balance": {
+            "type": "number",
+            "format": "float",
+            "default": 0
+          },
+          "xrp_is_active": {
+            "type": "boolean",
+            "default": true
+          },
+          "tth_balance": {
+            "type": "number",
+            "format": "float",
+            "default": 0
+          },
+          "tth_is_active": {
+            "type": "boolean",
+            "default": true
+          },
+          "dog_balance": {
+            "type": "number",
+            "format": "float",
+            "default": 0
+          },
+          "dog_is_active": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "Deposit": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "user": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "amount": {
+            "type": "number",
+            "format": "float",
+            "nullable": false
+          },
+          "date": {
+            "type": "string",
+            "format": "YYYY-MM-DD HH:MM:SS",
+            "default": "datetime.utcnow()"
+          }
+        }
+      },
+      "Transfer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "user": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "from_currency": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "from_amount": {
+            "type": "number",
+            "format": "float",
+            "nullable": false
+          },
+          "to_currency": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "to_amount": {
+            "type": "number",
+            "format": "float",
+            "nullable": false
+          },
+          "date": {
+            "type": "string",
+            "format": "YYYY-MM-DD HH:MM:SS",
+            "default": "datetime.utcnow()"
+          }
+        }
+      },
+      "Send": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "sender": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "receiver": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "currency": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "amount": {
+            "type": "number",
+            "format": "float",
+            "nullable": false
+          },
+          "state": {
+            "type": "string",
+            "format": "string",
+            "default": "Processing"
+          },
+          "date": {
+            "type": "string",
+            "format": "YYYY-MM-DD HH:MM:SS",
+            "default": "datetime.utcnow()"
+          }
+        }
+      },
+      "Verification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "user": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "date": {
+            "type": "string",
+            "format": "YYYY-MM-DD HH:MM:SS",
+            "default": "datetime.utcnow()"
+          }
+        }
+      },
+      "CurrencyActivation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "user": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "currency": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "state": {
+            "type": "string",
+            "format": "string",
+            "nullable": false
+          },
+          "date": {
+            "type": "string",
+            "format": "YYYY-MM-DD HH:MM:SS",
+            "default": "datetime.utcnow()"
+          }
+        }
+      }
+    }
+  }
+}
