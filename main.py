@@ -132,7 +132,30 @@ def verify():
     verification.user = user.email
     db.session.add(verification)
     db.session.commit()
-    
+
+    return OK_RESPONSE()
+
+
+@app.route('/user/profile', methods=['PUT'])
+def update_profile():
+    if not check_login_status():
+        abort(UNAUTHORISED)
+
+    data = parse_form_data(request.data)
+    email = data['email']
+
+    if not authenticate_email(email):
+        abort(UNAUTHORISED)
+
+    user = get_logged_in_user()
+    user.name = data['name']
+    user.last_name = data['last_name']
+    user.address = data['address']
+    user.city = data['city']
+    user.country = data['country']
+    user.phone_number = data['phone_number']
+
+    db.session.commit()
     return OK_RESPONSE()
 
 
