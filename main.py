@@ -1,6 +1,8 @@
 # <editor-fold desc="Imports">
 
 import json
+from datetime import datetime
+from random import randint
 
 import jsonpickle
 from flask import request, abort, session
@@ -11,16 +13,17 @@ from models.user import User
 from models.transactions import Deposit, Transfer, Send, Verification
 from models.wallet import Wallet
 from models.card import valid_card, Card
+from static.constants import CRYPTO_NAME_MAP
 
 # </editor-fold>
 
 
 # <editor-fold desc="Database and Session Setup">
 
+
 try:
     with app.app_context():
         db.create_all()
-        session['user'] = None
 except:  # NOQA
     pass
 
@@ -35,7 +38,7 @@ except:  # NOQA
 
 @app.route('/user/login', methods=['POST'])
 def login():
-    data = parse_form_data(request.data)
+    data = parse_request_data(request.data)
     email, password = data['email'], data['password']
 
     if check_login_status():
@@ -54,7 +57,7 @@ def logout():
     if not check_login_status():
         abort(UNAUTHORISED)
 
-    data = parse_form_data(request.data)
+    data = parse_request_data(request.data)
     email = data['email']
 
     if not authenticate_email(email):
@@ -69,7 +72,7 @@ def register():
     if check_login_status():
         abort(UNAUTHORISED)
 
-    data = parse_form_data(request.data)
+    data = parse_request_data(request.data)
     new_user: User = User()
 
     if check_user_exists(data['email']):
@@ -104,7 +107,7 @@ def verify():
     if not check_login_status():
         abort(UNAUTHORISED)
 
-    data = parse_form_data(request.data)
+    data = parse_request_data(request.data)
     email = data['email']
     card = Card(
         data['card_number'],
@@ -141,7 +144,7 @@ def update_profile():
     if not check_login_status():
         abort(UNAUTHORISED)
 
-    data = parse_form_data(request.data)
+    data = parse_request_data(request.data)
     email = data['email']
 
     if not authenticate_email(email):
@@ -175,6 +178,61 @@ def get_wallet():
 # </editor-fold>
 
 # <editor-fold desc="Transaction Routes">
+
+
+@app.route('//transaction/deposit', methods=['POST'])
+def deposit():
+    if not check_login_status():
+        abort(UNAUTHORISED)
+
+    data = parse_request_data(request.data)
+    email, amount = data['email'], data['amount']
+
+    if not authenticate_email(email) or not check_verification_status():
+        abort(UNAUTHORISED)
+    if amount <= 0:
+        abort(BAD_REQUEST)
+
+    # deposit funds
+    has_failed = deposit_funds(amount)
+    if has_failed:
+        abort(BAD_REQUEST)
+
+    # add transaction to db
+    deposit = create_deposit_transaction(amount)  # NOQA 3104
+    db.session.add(deposit)
+
+    db.session.commit()
+    return OK_RESPONSE()
+
+
+@app.route('//transaction/send', methods=['POST'])
+def send():
+    if not check_login_status():
+        abort(UNAUTHORISED)
+
+    data = parse_request_data(request.data)
+    email_sender, email_receiver = data['email_sender'], data['email_receiver']
+    amount, currency = data['amount'], data['currency']
+
+    if not authenticate_email(email_sender) or not check_verification_status():
+        abort(UNAUTHORISED)
+    if not check_user_exists(email_receiver) or \
+            amount <= 0 or \
+            authenticate_email(email_receiver):  # can't send funds to self
+        abort(BAD_REQUEST)
+
+    # send funds
+    has_failed = send_funds(email_receiver, currency, amount)
+    if has_failed:
+        abort(BAD_REQUEST)
+
+    # add transaction to db
+    transaction = create_send_transaction(email_receiver, currency, amount)
+    db.session.add(transaction)
+
+    db.session.commit()
+    return OK_RESPONSE()
 
 
 # </editor-fold>
@@ -220,7 +278,7 @@ def handle_404_error(_error):
                               mimetype='application/json')
 
 
-@app.errorhandler(500)
+@app.errorhandler(Exception)
 def handle_500_error(_error):
     """Return a http 500 error to client"""
     return app.response_class(response=jsonpickle.encode({'error': 'Internal Server Error'}),
@@ -234,22 +292,52 @@ def handle_500_error(_error):
 # <editor-fold desc="Utility">
 
 
-# <editor-fold desc="Authentication">
+# <editor-fold desc="Getters">
+
+
+def get_user(email: str) -> User:
+    """Returns user with the provided email"""
+    return User.query.filter_by(email=email).first()
 
 
 def get_logged_in_user() -> User:
-    """
-    :return: logged-in user
-    """
+    """Returns logged-in user"""
     return User.query.filter_by(user_id=session['user']).first()
 
 
+def get_users_wallet(email: str) -> Wallet:
+    """Returns wallet of the user with the provided email"""
+    user = get_user(email)
+    return Wallet.query.filter_by(user_id=user.user_id).first()
+
+
 def get_logged_in_users_wallet() -> Wallet:
-    """
-    :return: logged-in user's wallet
-    """
+    """Returns logged-in user's wallet"""
     user = get_logged_in_user()
     return Wallet.query.filter_by(user_id=user.user_id).first()
+
+
+def get_transactions(transaction_type: str) -> list[object]:
+    """
+    :param transaction_type: values = ['deposit', 'transfer', 'send']
+    :return: list of logged-in user's transactions
+    """
+    user = get_logged_in_user()
+
+    if transaction_type == 'deposit':
+        return Deposit.query.filter_by(user=user.email).all()
+    if transaction_type == 'transfer':
+        return Transfer.query.filter_by(user=user.email).all()
+    if transaction_type == 'send':
+        return Send.query.filter_by(sender=user.email).all()
+
+    return []
+
+
+# </editor-fold>
+
+
+# <editor-fold desc="Authentication">
 
 
 def check_login_status() -> bool:
@@ -260,6 +348,14 @@ def check_login_status() -> bool:
         if 'user' not in session or session['user'] is None:
             return False
         return True
+
+
+def check_verification_status() -> bool:
+    """
+    :return: True if the logged-in user is verified, False if not
+    """
+    user = get_logged_in_user()
+    return user.is_verified
 
 
 def authenticate_email(user_email: str) -> bool:
@@ -314,14 +410,107 @@ def check_user_exists(user_email: str) -> bool:
 # </editor-fold>
 
 
-def parse_form_data(form_data) -> dict:
+# <editor-fold desc="Transaction">
+
+# <editor-fold desc="Deposit">
+
+
+def deposit_funds(amount: float) -> bool:
+    """
+    Deposits funds to logged-in user's wallet
+    :return: True if failed to deposit funds, else False
+    """
+    try:
+        wallet: Wallet = get_logged_in_users_wallet()
+        wallet.usd_balance += amount
+
+        return False
+    except:  # NOQA
+        return True
+
+
+# noinspection PyTypeChecker
+# noinspection GrazieInspection
+def create_deposit_transaction(amount: float) -> Deposit:
+    """Creates a Deposit transaction object"""
+    user: User = get_logged_in_user()
+    deposit = Deposit()  # NOQA 3104
+
+    deposit.id = get_hashed_transaction_id(user.email)
+    deposit.user = user.email
+    deposit.amount = amount
+
+    return deposit
+
+
+# </editor-fold>
+
+# <editor-fold desc="Send">
+
+
+def send_funds(email_receiver: str, currency: str, amount: float) -> bool:
+    """
+    Sends funds from one logged-in account to another
+    :return: True if failed to send funds, else False
+    """
+    try:
+        wallet_sender: Wallet = get_logged_in_users_wallet()
+        wallet_receiver: Wallet = get_users_wallet(email_receiver)
+
+        # check if user has sufficient funds in that currency to send
+        if wallet_sender.__getattribute__(currency) < amount:
+            return True
+
+        # equalize funds
+        wallet_sender.__setattr__(currency, wallet_sender.__getattribute__(currency) - amount)
+        wallet_receiver.__setattr__(currency, wallet_receiver.__getattribute__(currency) + amount)
+
+        return False
+    except:  # NOQA
+        return True
+
+
+# noinspection PyTypeChecker
+# noinspection GrazieInspection
+def create_send_transaction(email_receiver: str, currency: str, amount: float) -> Send:
+    """Creates a Send transaction object"""
+    user_sender: User = get_logged_in_user()
+    user_receiver: User = get_user(email_receiver)
+
+    send = Send()  # NOQA 3104
+
+    # fill in data
+    send.id = get_hashed_transaction_id(user_sender.email, user_receiver.email, amount)
+    send.sender = user_sender.email
+    send.currency = CRYPTO_NAME_MAP[currency]
+    send.receiver = user_receiver.email
+    send.amount = amount
+    send.date = datetime.utcnow()
+
+    return send
+
+
+# </editor-fold>
+
+# <editor-fold desc="Transfer">
+
+
+# </editor-fold>
+
+# </editor-fold>
+
+
+# <editor-fold desc="Other">
+
+
+def parse_request_data(request_data) -> dict:
     """
     Parses data from form
-    :param form_data: Form data
+    :param request_data: Form data
     :return: Parsed data in dictionary
     """
 
-    string_data = ''.join(chr(i) for i in form_data)  # Convert ascii values to string
+    string_data = ''.join(chr(i) for i in request_data)  # Convert ascii values to string
     json_data = json.loads(string_data)  # Convert string data to list of dictionaries
 
     # TODO:
@@ -349,6 +538,21 @@ def hash_text(text: str) -> str:
     hashed_text = keccak.new(digest_bits=256)
     hashed_text.update(a_byte_array)
     return hashed_text.hexdigest()
+
+
+def get_hashed_transaction_id(user_1: str, user_2: str = '', amount='') -> str:
+    """
+    Generate random hash value for transactions
+    :param user_1: Email of user (sending user in the case of fund sending)
+    :param user_2: Email of receiving user in the case of fund sending
+    :param amount: Amount of funds being transferred in the case of a transfer
+    :return: Hash string which is meant to be used as the transaction ID
+    """
+    random_value = randint(1, 100000000000)
+    return hash_text(f'{user_1}{user_2}{amount}{random_value}')
+
+
+# </editor-fold>
 
 
 # </editor-fold>

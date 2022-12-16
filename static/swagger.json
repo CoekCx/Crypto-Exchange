@@ -364,6 +364,118 @@
           }
         }
       }
+    },
+    "/transaction/deposit": {
+      "post": {
+        "tags": [
+          "Transaction Requests"
+        ],
+        "summary": "Deposit funds",
+        "requestBody": {
+          "description": "",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "",
+                "type": "object",
+                "required": [
+                  "email",
+                  "amount"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "format": "float"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorised"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/transaction/send": {
+      "post": {
+        "tags": [
+          "Transaction Requests"
+        ],
+        "summary": "Send funds",
+        "requestBody": {
+          "description": "",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "",
+                "type": "object",
+                "required": [
+                  "email_sender",
+                  "email_receiver",
+                  "amount",
+                  "currency"
+                ],
+                "properties": {
+                  "email_sender": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "email_receiver": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "format": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorised"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
     }
   },
   "components": {
