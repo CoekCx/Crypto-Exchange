@@ -570,36 +570,6 @@
             "default": "datetime.utcnow()"
           }
         }
-      },
-      "CurrencyActivation": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "string",
-            "nullable": false
-          },
-          "user": {
-            "type": "string",
-            "format": "string",
-            "nullable": false
-          },
-          "currency": {
-            "type": "string",
-            "format": "string",
-            "nullable": false
-          },
-          "state": {
-            "type": "string",
-            "format": "string",
-            "nullable": false
-          },
-          "date": {
-            "type": "string",
-            "format": "YYYY-MM-DD HH:MM:SS",
-            "default": "datetime.utcnow()"
-          }
-        }
       }
     }
   }
