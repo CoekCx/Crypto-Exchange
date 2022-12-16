@@ -159,6 +159,19 @@ def update_profile():
     return OK_RESPONSE()
 
 
+@app.route('/user/wallet', methods=['GET'])
+def get_wallet():
+    if not check_login_status():
+        abort(UNAUTHORISED)
+
+    email = request.args.get('email')
+    if not authenticate_email(email):
+        abort(UNAUTHORISED)
+
+    wallet: Wallet = get_logged_in_users_wallet()
+    return OK_RESPONSE(wallet)
+
+
 # </editor-fold>
 
 # <editor-fold desc="Transaction Routes">
@@ -229,6 +242,14 @@ def get_logged_in_user() -> User:
     :return: logged-in user
     """
     return User.query.filter_by(user_id=session['user']).first()
+
+
+def get_logged_in_users_wallet() -> Wallet:
+    """
+    :return: logged-in user's wallet
+    """
+    user = get_logged_in_user()
+    return Wallet.query.filter_by(user_id=user.user_id).first()
 
 
 def check_login_status() -> bool:
