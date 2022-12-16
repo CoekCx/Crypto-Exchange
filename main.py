@@ -8,7 +8,7 @@ from Crypto.Hash import keccak
 
 from app import app, db
 from models.user import User
-from models.transactions import Deposit, Transfer, Send
+from models.transactions import Deposit, Transfer, Send, Verification, CurrencyActivation
 from models.wallet import Wallet
 from models.card import valid_card, Card
 
@@ -127,7 +127,12 @@ def verify():
         abort(BAD_REQUEST)
 
     user.is_verified = True
+    verification: Verification = Verification()
+    verification.id = user.user_id
+    verification.user = user.email
+    db.session.add(verification)
     db.session.commit()
+    
     return OK_RESPONSE()
 
 
