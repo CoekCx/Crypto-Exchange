@@ -4,8 +4,6 @@ import json
 
 import jsonpickle
 from flask import request, abort, session
-from flask_swagger import swagger
-from flask_swagger_ui import get_swaggerui_blueprint
 from Crypto.Hash import keccak
 
 from app import app, db
@@ -25,23 +23,6 @@ try:
         session['user'] = None
 except:  # NOQA
     pass
-
-# </editor-fold>
-
-
-# <editor-fold desc="Swagger Setup">
-
-
-SWAGGER_URL = '/swagger'
-API_URL = '/static/swagger.json'
-SWAGGER_UI_BLUEPRINT = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_URL,
-    config={
-        'app_name': "DRS-Group-1-Python-Flask"
-    }
-)
-app.register_blueprint(SWAGGER_UI_BLUEPRINT, url_prefix=SWAGGER_URL)
 
 
 # </editor-fold>
@@ -80,6 +61,41 @@ def logout():
         abort(UNAUTHORISED)
 
     session['user'] = None
+    return OK_RESPONSE()
+
+
+@app.route('/user/register', methods=['POST'])
+def register():
+    if check_login_status():
+        abort(UNAUTHORISED)
+
+    data = parse_form_data(request.data)
+    new_user: User = User()
+
+    if check_user_exists(data['email']):
+        abort(BAD_REQUEST)
+
+    # fill user data
+    new_user.user_id = hash_text(data['email'])
+    new_user.is_verified = False
+    new_user.name = data['name']
+    new_user.last_name = data['last_name']
+    new_user.address = data['address']
+    new_user.city = data['city']
+    new_user.country = data['country']
+    new_user.phone_number = data['phone_number']
+    new_user.email = data['email']
+    new_user.password = hash_text(data['password'])
+
+    # create corresponding wallet for the new user
+    wallet: Wallet = Wallet()
+    wallet.user_id = new_user.user_id
+
+    # save new entities to db
+    db.session.add(new_user)
+    db.session.add(wallet)
+    db.session.commit()
+
     return OK_RESPONSE()
 
 
@@ -177,6 +193,9 @@ def handle_500_error(_error):
 # <editor-fold desc="Utility">
 
 
+# <editor-fold desc="Authentication">
+
+
 def get_logged_in_user() -> User:
     """
     :return: logged-in user
@@ -243,13 +262,15 @@ def check_user_exists(user_email: str) -> bool:
         return False
 
 
+# </editor-fold>
+
+
 def parse_form_data(form_data) -> dict:
     """
     Parses data from form
     :param form_data: Form data
     :return: Parsed data in dictionary
     """
-    parsed_data = {}
 
     string_data = ''.join(chr(i) for i in form_data)  # Convert ascii values to string
     json_data = json.loads(string_data)  # Convert string data to list of dictionaries
@@ -257,6 +278,7 @@ def parse_form_data(form_data) -> dict:
     # TODO:
     #  Delete commented code in case it isn't needed after testing with real front
     # Parse dictionary data
+    # parsed_data = {}
     # temp_value = None
     # for field in json_data:
     #     for key, value in json_data.items():

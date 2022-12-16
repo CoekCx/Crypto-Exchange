@@ -109,6 +109,81 @@
         }
       }
     },
+    "/user/register": {
+      "post": {
+        "tags": [
+          "User Requests"
+        ],
+        "summary": "Register a new account",
+        "requestBody": {
+          "description": "",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "",
+                "type": "object",
+                "required": [
+                  "name",
+                  "last_name",
+                  "address",
+                  "city",
+                  "country",
+                  "phone_number",
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "format": "string"
+                  },
+                  "last_name": {
+                    "type": "string",
+                    "format": "string"
+                  },
+                  "address": {
+                    "type": "string",
+                    "format": "string"
+                  },
+                  "city": {
+                    "type": "string",
+                    "format": "string"
+                  },
+                  "country": {
+                    "type": "string",
+                    "format": "string"
+                  },
+                  "phone_number": {
+                    "type": "string",
+                    "format": "phone"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorised"
+          }
+        }
+      }
+    },
     "/user/verify": {
       "put": {
         "tags": [
