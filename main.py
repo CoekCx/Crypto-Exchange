@@ -12,7 +12,7 @@ from app import app, db
 from models.user import User
 from models.transactions import Deposit, Transfer, Send
 from models.wallet import Wallet
-from models.card import valid_card
+from models.card import valid_card, Card
 
 # </editor-fold>
 
@@ -22,7 +22,7 @@ from models.card import valid_card
 try:
     with app.app_context():
         db.create_all()
-        session['user'], session['is_verified'] = None, None
+        session['user'] = None
 except:  # NOQA
     pass
 
@@ -65,7 +65,6 @@ def login():
 
     user = User.query.filter_by(email=email).first()
     session['user'] = user.user_id
-    session['is_verified'] = 'True' if user.is_verified else 'False'
     return OK_RESPONSE(user)
 
 
@@ -80,7 +79,39 @@ def logout():
     if not authenticate_email(email):
         abort(UNAUTHORISED)
 
-    session['user'], session['is_verified'] = None, None
+    session['user'] = None
+    return OK_RESPONSE()
+
+
+@app.route('/user/verify', methods=['PUT'])
+def verify():
+    if not check_login_status():
+        abort(UNAUTHORISED)
+
+    data = parse_form_data(request.data)
+    email = data['email']
+    card = Card(
+        data['card_number'],
+        data['card_name'],
+        data['card_expiration_date'],
+        data['card_security_code']
+    )
+
+    if not check_user_exists(email):
+        abort(BAD_REQUEST)
+
+    if not authenticate_email(email):
+        abort(UNAUTHORISED)
+
+    user = get_logged_in_user()
+    if user.is_verified:
+        abort(BAD_REQUEST)
+
+    if card != valid_card:
+        abort(BAD_REQUEST)
+
+    user.is_verified = True
+    db.session.commit()
     return OK_RESPONSE()
 
 
@@ -146,13 +177,19 @@ def handle_500_error(_error):
 # <editor-fold desc="Utility">
 
 
+def get_logged_in_user() -> User:
+    """
+    :return: logged-in user
+    """
+    return User.query.filter_by(user_id=session['user']).first()
+
+
 def check_login_status() -> bool:
     """
     :return: True if there is someone logged-in, False if not
     """
     with app.app_context():
-        if 'user' not in session or session['user'] is None or \
-                'is_verified' not in session or session['is_verified'] is None:
+        if 'user' not in session or session['user'] is None:
             return False
         return True
 
@@ -246,4 +283,4 @@ def hash_text(text: str) -> str:
 # </editor-fold>
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)

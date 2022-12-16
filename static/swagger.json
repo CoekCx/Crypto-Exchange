@@ -108,6 +108,66 @@
           }
         }
       }
+    },
+    "/user/verify": {
+      "put": {
+        "tags": [
+          "User Requests"
+        ],
+        "summary": "Verify Account",
+        "requestBody": {
+          "description": "",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "",
+                "type": "object",
+                "required": [
+                  "email",
+                  "card_number",
+                  "card_name",
+                  "card_expiration_date",
+                  "card_security_code"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "card_number": {
+                    "type": "integer",
+                    "format": "XXXXXXXXXXXXXXXX"
+                  },
+                  "card_name": {
+                    "type": "string",
+                    "format": "string"
+                  },
+                  "card_expiration_date": {
+                    "type": "string",
+                    "format": "XX/XX"
+                  },
+                  "card_security_code": {
+                    "type": "integer",
+                    "format": "XXX"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorised"
+          }
+        }
+      }
     }
   },
   "components": {
