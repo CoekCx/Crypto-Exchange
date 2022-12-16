@@ -46,14 +46,3 @@ class Verification(db.Model):
 
     def __repr__(self):
         return f'<Transaction.Verification {self.id}>'
-
-
-class CurrencyActivation(db.Model):
-    id = db.Column(db.String, primary_key=True)
-    user = db.Column(db.String, nullable=False)
-    currency = db.Column(db.String, nullable=False)
-    state = db.Column(db.String, nullable=False)
-    date = db.Column(db.String, default=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-
-    def __repr__(self):
-        return f'<Transaction.CurrencyActivation {self.id}>'

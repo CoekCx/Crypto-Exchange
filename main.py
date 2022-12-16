@@ -8,7 +8,7 @@ from Crypto.Hash import keccak
 
 from app import app, db
 from models.user import User
-from models.transactions import Deposit, Transfer, Send, Verification, CurrencyActivation
+from models.transactions import Deposit, Transfer, Send, Verification
 from models.wallet import Wallet
 from models.card import valid_card, Card
 
