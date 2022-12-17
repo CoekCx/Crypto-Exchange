@@ -476,6 +476,67 @@
           }
         }
       }
+    },
+    "/transaction/transfer": {
+      "post": {
+        "tags": [
+          "Transaction Requests"
+        ],
+        "summary": "Transfer funds",
+        "requestBody": {
+          "description": "",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "",
+                "type": "object",
+                "required": [
+                  "email",
+                  "amount",
+                  "currency_from",
+                  "currency_to"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "format": "float"
+                  },
+                  "currency_from": {
+                    "type": "string",
+                    "format": "string"
+                  },
+                  "currency_to": {
+                    "type": "string",
+                    "format": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorised"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
     }
   },
   "components": {

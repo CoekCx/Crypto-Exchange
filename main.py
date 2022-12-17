@@ -7,6 +7,7 @@ from random import randint
 import jsonpickle
 from flask import request, abort, session
 from Crypto.Hash import keccak
+from pycoingecko import CoinGeckoAPI
 
 from app import app, db
 from models.user import User
@@ -180,7 +181,7 @@ def get_wallet():
 # <editor-fold desc="Transaction Routes">
 
 
-@app.route('//transaction/deposit', methods=['POST'])
+@app.route('/transaction/deposit', methods=['POST'])
 def deposit():
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -206,7 +207,7 @@ def deposit():
     return OK_RESPONSE()
 
 
-@app.route('//transaction/send', methods=['POST'])
+@app.route('/transaction/send', methods=['POST'])
 def send():
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -229,6 +230,33 @@ def send():
 
     # add transaction to db
     transaction = create_send_transaction(email_receiver, currency, amount)
+    db.session.add(transaction)
+
+    db.session.commit()
+    return OK_RESPONSE()
+
+
+@app.route('/transaction/transfer', methods=['POST'])
+def transfer():
+    if not check_login_status():
+        abort(UNAUTHORISED)
+
+    data = parse_request_data(request.data)
+    email, amount_from = data['email'], data['amount']
+    currency_from, currency_to = data['currency_from'], data['currency_to']
+
+    if not authenticate_email(email) or not check_verification_status():
+        abort(UNAUTHORISED)
+    if amount_from <= 0 or currency_from == currency_to:
+        abort(BAD_REQUEST)
+
+    # transfer funds
+    has_failed, amount_to = transfer_funds(amount_from, currency_from, currency_to)
+    if has_failed:
+        abort(BAD_REQUEST)
+
+    # add transaction to db
+    transaction = create_transfer_transaction(amount_from, amount_to, currency_from, currency_to)
     db.session.add(transaction)
 
     db.session.commit()
@@ -495,6 +523,46 @@ def create_send_transaction(email_receiver: str, currency: str, amount: float) -
 # <editor-fold desc="Transfer">
 
 
+def transfer_funds(amount_from: float, currency_from: str, currency_to: str) -> (bool, float):
+    """
+    Transfer funds from one currency to another
+    :return: True if failed to transfer funds, else False
+    """
+    try:
+        wallet: Wallet = get_logged_in_users_wallet()
+
+        # check if user has sufficient funds in that currency to transfer
+        if wallet.__getattribute__(currency_from) < amount_from:
+            return True, 0
+
+        # equalize funds
+        amount_to = convert(currency_from, currency_to, amount_from)
+        wallet.__setattr__(currency_from, wallet.__getattribute__(currency_from) - amount_from)
+        wallet.__setattr__(currency_to, wallet.__getattribute__(currency_to) + amount_to)
+
+        return False, amount_to
+    except:  # NOQA
+        return True, 0
+
+
+# noinspection PyTypeChecker
+def create_transfer_transaction(amount_from: float, amount_to: float, currency_from: str, currency_to: str) -> Transfer:
+    """Creates a Transfer transaction object"""
+    user: User = get_logged_in_user()
+
+    transfer = Transfer()  # NOQA 3104
+
+    # fill in data
+    transfer.id = get_hashed_transaction_id(user.email, amount=amount_from)
+    transfer.user = user.email
+    transfer.from_currency = CRYPTO_NAME_MAP[currency_from]
+    transfer.to_currency = CRYPTO_NAME_MAP[currency_to]
+    transfer.from_amount = amount_from
+    transfer.to_amount = amount_to
+
+    return transfer
+
+
 # </editor-fold>
 
 # </editor-fold>
@@ -550,6 +618,40 @@ def get_hashed_transaction_id(user_1: str, user_2: str = '', amount='') -> str:
     """
     random_value = randint(1, 100000000000)
     return hash_text(f'{user_1}{user_2}{amount}{random_value}')
+
+
+def get_crypto_prices() -> {str: {str: float}}:
+    """
+    Gets crypto prices from the CoinGeckoAPI api
+    :return: Example return value {'bitcoin': {'usd': 3461.27}, 'ethereum': {'usd': 106.92}, 'ripple': {'usd': 106.92},
+             'tether': {'usd': 106.92}, 'dogecoin': {'usd': 106.92}}
+    """
+    cg = CoinGeckoAPI()
+    return cg.get_price(ids=['bitcoin', 'ethereum', 'ripple', 'tether', 'dogecoin'], vs_currencies='usd')
+
+
+def convert(currency_from: str, currency_to: str, amount: float) -> float:
+    """
+    Converts one currency to another
+    :param currency_from: Currency you're converting from (Expected values are attribute names from the wallet model)
+    :param currency_to: Currency you're converting to (Expected values are attribute names from the wallet model)
+    :param amount: Amount of the currency you're converting from
+    :return: Amount of the currency you're converting to
+    """
+    attribute_price_mapping = {
+        'btc_balance': 'bitcoin',
+        'eth_balance': 'ethereum',
+        'xrp_balance': 'ripple',
+        'tth_balance': 'tether',
+        'dog_balance': 'dogecoin'
+    }
+
+    prices = get_crypto_prices()
+
+    f_curr_usd_value = 1 if currency_from == 'usd_balance' else prices[attribute_price_mapping[currency_from]]['usd']
+    t_curr_usd_value = 1 if currency_to == 'usd_balance' else prices[attribute_price_mapping[currency_to]]['usd']
+
+    return round((f_curr_usd_value / t_curr_usd_value) * amount, 7)
 
 
 # </editor-fold>
