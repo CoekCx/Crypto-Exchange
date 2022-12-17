@@ -5,15 +5,15 @@ from datetime import datetime
 from random import randint
 
 import jsonpickle
-from flask import request, abort, session
 from Crypto.Hash import keccak
+from flask import request, abort, session
 from pycoingecko import CoinGeckoAPI
 
 from app import app, db
-from models.user import User
-from models.transactions import Deposit, Transfer, Send, Verification
-from models.wallet import Wallet
 from models.card import valid_card, Card
+from models.transactions import Deposit, Transfer, Send, Verification
+from models.user import User
+from models.wallet import Wallet
 from static.constants import CRYPTO_NAME_MAP
 
 # </editor-fold>
@@ -264,6 +264,18 @@ def transfer():
 
 
 # </editor-fold>
+
+
+# <editor-fold desc="Utility">
+
+
+@app.route('/crypto')
+def exchange_rate():
+    return OK_RESPONSE(get_crypto_prices())
+
+
+# </editor-fold>
+
 
 # </editor-fold>
 

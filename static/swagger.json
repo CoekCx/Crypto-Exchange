@@ -18,6 +18,10 @@
     {
       "name": "Transaction Requests",
       "description": "Example API for transaction related requests"
+    },
+    {
+      "name": "Utility Requests",
+      "description": "Example API for utility related requests"
     }
   ],
   "paths": {
@@ -531,6 +535,42 @@
           },
           "401": {
             "description": "Unauthorised"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/crypto": {
+      "get": {
+        "tags": [
+          "Utility Requests"
+        ],
+        "summary": "Get cryptocurrency market prices",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "properties": {
+                      "usd": {
+                        "type": "number",
+                        "format": "float"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal Server Error"
