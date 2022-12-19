@@ -1,6 +1,7 @@
 # <editor-fold desc="Imports">
 
 import json
+from _operator import attrgetter
 from datetime import datetime
 from random import randint
 
@@ -263,6 +264,27 @@ def transfer():
     return OK_RESPONSE()
 
 
+@app.route('/transaction/history/<string:transaction_type>')
+def history(transaction_type: str):
+    if not check_login_status():
+        abort(UNAUTHORISED)
+
+    # TODO: Fix
+    #  Sort not working
+    #  Filtering not tested yet
+    data = request.args
+    email = data['email']
+
+    if not authenticate_email(email) or not check_verification_status():
+        abort(UNAUTHORISED)
+
+    transactions = fetch_transactions(transaction_type)
+    transactions = filter_transactions(transactions, transaction_type, data)
+    sort_transactions(transactions, data)
+
+    return OK_RESPONSE(transactions)
+
+
 # </editor-fold>
 
 
@@ -357,23 +379,6 @@ def get_logged_in_users_wallet() -> Wallet:
     return Wallet.query.filter_by(user_id=user.user_id).first()
 
 
-def get_transactions(transaction_type: str) -> list[object]:
-    """
-    :param transaction_type: values = ['deposit', 'transfer', 'send']
-    :return: list of logged-in user's transactions
-    """
-    user = get_logged_in_user()
-
-    if transaction_type == 'deposit':
-        return Deposit.query.filter_by(user=user.email).all()
-    if transaction_type == 'transfer':
-        return Transfer.query.filter_by(user=user.email).all()
-    if transaction_type == 'send':
-        return Send.query.filter_by(sender=user.email).all()
-
-    return []
-
-
 # </editor-fold>
 
 
@@ -452,6 +457,73 @@ def check_user_exists(user_email: str) -> bool:
 
 # <editor-fold desc="Transaction">
 
+# <editor-fold desc="General">
+
+
+def fetch_transactions(transaction_type: str):
+    """Returns list of transactions of provided type"""
+    user = get_logged_in_user()
+    transactions = None
+
+    if transaction_type == 'deposit':
+        transactions = Deposit.query.filter_by(user=user.email).all()
+    elif transaction_type == 'user-to-user':
+        transactions = Send.query.filter(db.or_(
+            Send.sender.like(user.email),
+            Send.receiver.like(user.email)
+        )).all()
+    elif transaction_type == 'exchange':
+        transactions = Transfer.query.filter_by(user=user.email).all()
+    elif transaction_type == 'verification':
+        transactions = Verification.query.filter_by(user=user.email).first()
+
+    return transactions
+
+
+def filter_transactions(transactions_list: list, transaction_type: str, request_data: dict):
+    """Returns filtered list of transactions with provided conditions"""
+    filtered_transactions = None
+
+    if transaction_type == 'deposit':
+        filtered_transactions = filter_deposits(transactions_list,
+                                                request_data.get('user', None),
+                                                request_data.get('amount_lower', None),
+                                                request_data.get('amount_upper', None))
+    elif transaction_type == 'user-to-user':
+        filtered_transactions = filter_sends(transactions_list,
+                                             request_data.get('sender', None),
+                                             request_data.get('receiver', None),
+                                             request_data.get('currency', None),
+                                             request_data.get('amount_lower', None),
+                                             request_data.get('amount_upper', None))
+    elif transaction_type == 'exchange':
+        filtered_transactions = filter_transfers(transactions_list,
+                                                 request_data.get('from_currency', None),
+                                                 request_data.get('to_currency', None),
+                                                 request_data.get('from_amount_lower', None),
+                                                 request_data.get('from_amount_upper', None),
+                                                 request_data.get('to_amount_lower', None),
+                                                 request_data.get('to_amount_upper', None))
+    elif transaction_type == 'verification':
+        filtered_transactions = transactions_list
+
+    return filtered_transactions
+
+
+def sort_transactions(transactions_list: list, request_data: dict):
+    """Sorts list of transactions by the attribute and order if anything is provided in the request data"""
+    try:
+        if 'sort_by' in request_data:
+            transactions_list.sort(key=lambda x: getattr(x, request_data.get('sort_by')),
+                                   reverse=(request_data.get('order_by', '') == 'desc'))
+        else:
+            transactions_list.sort(key=attrgetter('date'), reverse=False)
+    except:  # NOQA
+        pass
+
+
+# </editor-fold>
+
 # <editor-fold desc="Deposit">
 
 
@@ -481,6 +553,22 @@ def create_deposit_transaction(amount: float) -> Deposit:
     deposit.amount = amount
 
     return deposit
+
+
+def filter_deposits(deposit_list, user, amount_lower, amount_upper):
+    """
+    Filters deposits based on the provided arguments
+    :param deposit_list: initial list of deposits
+    :param user: string which the user field must contain
+    :param amount_lower: amount which the amount field must be lower than or equal to
+    :param amount_upper: amount which the amount field must be higher than or equal to
+    :return: filtered list of deposits
+    """
+    # noinspection PyShadowingNames
+    return [deposit for deposit in deposit_list if
+            (True if user is None else user in deposit.user) and
+            (True if amount_lower is None else deposit.amount <= amount_lower) and
+            (True if amount_upper is None else deposit.amount >= amount_upper)]
 
 
 # </editor-fold>
@@ -530,6 +618,26 @@ def create_send_transaction(email_receiver: str, currency: str, amount: float) -
     return send
 
 
+def filter_sends(send_list, sender, receiver, currency, amount_lower, amount_upper):
+    """
+    Filters sends based on the provided arguments
+    :param send_list: initial list of sends
+    :param sender: string which the sender field must contain
+    :param receiver: string which the receiver field must contain
+    :param currency: string which the currency field must contain
+    :param amount_lower: amount which the amount field must be lower than or equal to
+    :param amount_upper: amount which the amount field must be higher than or equal to
+    :return: filtered list of sends
+    """
+    # noinspection PyShadowingNames
+    return [send for send in send_list if
+            (True if sender is None else sender in send.sender) and
+            (True if receiver is None else receiver in send.receiver) and
+            (True if currency is None else currency in send.currency) and
+            (True if amount_lower is None else send.amount <= amount_lower) and
+            (True if amount_upper is None else send.amount >= amount_upper)]
+
+
 # </editor-fold>
 
 # <editor-fold desc="Transfer">
@@ -573,6 +681,29 @@ def create_transfer_transaction(amount_from: float, amount_to: float, currency_f
     transfer.to_amount = amount_to
 
     return transfer
+
+
+def filter_transfers(transfer_list, from_currency, to_currency,
+                     from_amount_lower, from_amount_upper, to_amount_lower, to_amount_upper):
+    """
+    Filters sends based on the provided arguments
+    :param transfer_list: initial list of transfers
+    :param from_currency: string which the from_currency field must contain
+    :param to_currency: string which the to_currency field must contain
+    :param from_amount_lower: amount which the from_amount field must be lower than or equal to
+    :param from_amount_upper: amount which the from_amount field must be higher than or equal to
+    :param to_amount_lower: amount which the to_amount field must be lower than or equal to
+    :param to_amount_upper: amount which the to_amount field must be higher than or equal to
+    :return: filtered list of transfers
+    """
+    # noinspection PyShadowingNames
+    return [transfer for transfer in transfer_list if
+            (True if from_currency is None else from_currency in transfer.from_currency) and
+            (True if to_currency is None else to_currency in transfer.to_currency) and
+            (True if from_amount_lower is None else transfer.from_amount <= from_amount_lower) and
+            (True if from_amount_upper is None else transfer.from_amount >= from_amount_upper) and
+            (True if to_amount_lower is None else transfer.to_amount <= to_amount_lower) and
+            (True if to_amount_upper is None else transfer.to_amount >= to_amount_upper)]
 
 
 # </editor-fold>
