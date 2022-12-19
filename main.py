@@ -269,9 +269,6 @@ def history(transaction_type: str):
     if not check_login_status():
         abort(UNAUTHORISED)
 
-    # TODO: Fix
-    #  Sort not working
-    #  Filtering not tested yet
     data = request.args
     email = data['email']
 
@@ -287,7 +284,6 @@ def history(transaction_type: str):
 
 # </editor-fold>
 
-
 # <editor-fold desc="Utility">
 
 
@@ -297,7 +293,6 @@ def exchange_rate():
 
 
 # </editor-fold>
-
 
 # </editor-fold>
 
@@ -486,7 +481,6 @@ def filter_transactions(transactions_list: list, transaction_type: str, request_
 
     if transaction_type == 'deposit':
         filtered_transactions = filter_deposits(transactions_list,
-                                                request_data.get('user', None),
                                                 request_data.get('amount_lower', None),
                                                 request_data.get('amount_upper', None))
     elif transaction_type == 'user-to-user':
@@ -555,7 +549,7 @@ def create_deposit_transaction(amount: float) -> Deposit:
     return deposit
 
 
-def filter_deposits(deposit_list, user, amount_lower, amount_upper):
+def filter_deposits(deposit_list, amount_lower, amount_upper):
     """
     Filters deposits based on the provided arguments
     :param deposit_list: initial list of deposits
@@ -566,9 +560,8 @@ def filter_deposits(deposit_list, user, amount_lower, amount_upper):
     """
     # noinspection PyShadowingNames
     return [deposit for deposit in deposit_list if
-            (True if user is None else user in deposit.user) and
-            (True if amount_lower is None else deposit.amount <= amount_lower) and
-            (True if amount_upper is None else deposit.amount >= amount_upper)]
+            (True if amount_lower is None else deposit.amount >= float(amount_lower)) and
+            (True if amount_upper is None else deposit.amount <= float(amount_upper))]
 
 
 # </editor-fold>
@@ -634,8 +627,8 @@ def filter_sends(send_list, sender, receiver, currency, amount_lower, amount_upp
             (True if sender is None else sender in send.sender) and
             (True if receiver is None else receiver in send.receiver) and
             (True if currency is None else currency in send.currency) and
-            (True if amount_lower is None else send.amount <= amount_lower) and
-            (True if amount_upper is None else send.amount >= amount_upper)]
+            (True if amount_lower is None else send.amount >= float(amount_lower)) and
+            (True if amount_upper is None else send.amount <= float(amount_upper))]
 
 
 # </editor-fold>
@@ -700,10 +693,10 @@ def filter_transfers(transfer_list, from_currency, to_currency,
     return [transfer for transfer in transfer_list if
             (True if from_currency is None else from_currency in transfer.from_currency) and
             (True if to_currency is None else to_currency in transfer.to_currency) and
-            (True if from_amount_lower is None else transfer.from_amount <= from_amount_lower) and
-            (True if from_amount_upper is None else transfer.from_amount >= from_amount_upper) and
-            (True if to_amount_lower is None else transfer.to_amount <= to_amount_lower) and
-            (True if to_amount_upper is None else transfer.to_amount >= to_amount_upper)]
+            (True if from_amount_lower is None else transfer.from_amount >= float(from_amount_lower)) and
+            (True if from_amount_upper is None else transfer.from_amount <= float(from_amount_upper)) and
+            (True if to_amount_lower is None else transfer.to_amount >= float(to_amount_lower)) and
+            (True if to_amount_upper is None else transfer.to_amount <= float(to_amount_upper))]
 
 
 # </editor-fold>

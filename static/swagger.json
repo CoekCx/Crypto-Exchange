@@ -610,7 +610,7 @@
             }
           },
           {
-            "name": "from_amount",
+            "name": "from_amount_lower",
             "in": "query",
             "required": false,
             "schema": {
@@ -618,7 +618,7 @@
             }
           },
           {
-            "name": "to_amount",
+            "name": "from_amount_upper",
             "in": "query",
             "required": false,
             "schema": {
@@ -626,7 +626,31 @@
             }
           },
           {
-            "name": "amount",
+            "name": "to_amount_lower",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to_amount_upper",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "amount_lower",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "amount_upper",
             "in": "query",
             "required": false,
             "schema": {
