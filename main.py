@@ -3,14 +3,19 @@
 import json
 from _operator import attrgetter
 from datetime import datetime
+from multiprocessing import Process
 from random import randint
+from time import sleep
+from typing import Union
 
 import jsonpickle
 from Crypto.Hash import keccak
 from flask import request, abort, session
+from flask_socketio import emit
 from pycoingecko import CoinGeckoAPI
 
-from app import app, db
+from app import app, db, socketio
+from config import MINING_TIME_IN_SECONDS
 from models.card import valid_card, Card
 from models.transactions import Deposit, Transfer, Send, Verification
 from models.user import User
@@ -234,6 +239,7 @@ def send():
     db.session.add(transaction)
 
     db.session.commit()
+    start_mining_transaction('send', transaction.id)
     return OK_RESPONSE()
 
 
@@ -261,6 +267,7 @@ def transfer():
     db.session.add(transaction)
 
     db.session.commit()
+    start_mining_transaction('transfer', transaction.id)
     return OK_RESPONSE()
 
 
@@ -372,6 +379,16 @@ def get_logged_in_users_wallet() -> Wallet:
     """Returns logged-in user's wallet"""
     user = get_logged_in_user()
     return Wallet.query.filter_by(user_id=user.user_id).first()
+
+
+def get_transaction(transaction_type: str, transaction_id: str) -> Union[Transfer, Send, None]:
+    """Returns crypto related transaction based on its id"""
+    if transaction_type == 'transfer':
+        return Transfer.query.filter_by(id=transaction_id)
+    if transaction_type == 'send':
+        return Send.query.filter_by(id=transaction_id)
+    else:
+        return None
 
 
 # </editor-fold>
@@ -553,7 +570,6 @@ def filter_deposits(deposit_list, amount_lower, amount_upper):
     """
     Filters deposits based on the provided arguments
     :param deposit_list: initial list of deposits
-    :param user: string which the user field must contain
     :param amount_lower: amount which the amount field must be lower than or equal to
     :param amount_upper: amount which the amount field must be higher than or equal to
     :return: filtered list of deposits
@@ -700,6 +716,43 @@ def filter_transfers(transfer_list, from_currency, to_currency,
 
 
 # </editor-fold>
+
+# </editor-fold>
+
+
+# <editor-fold desc="Mining">
+
+
+@socketio.on('connect')
+def handle_connect(sid: str) -> None:
+    """Connect client using socket.io for notification delivery"""
+    # TODO:
+    #  Test to see whether this method actually works
+    session['user_sid'] = sid
+    emit('Connected to server', room=sid)
+
+
+def start_mining_transaction(transaction_type: str, transaction_id: str) -> None:
+    """Start the process of mining transaction"""
+    proc = Process(target=mine, args=(transaction_type, transaction_id,))
+    proc.start()
+
+
+def mine(transaction_type: str, transaction_id: str) -> None:
+    """Mine transaction and once done, notify client of the completion"""
+    try:
+        with app.app_context():
+            sleep(MINING_TIME_IN_SECONDS)  # "Mine" for 5 minutes
+
+            transaction = get_transaction(transaction_type, transaction_id)
+            transaction.state = 'Processed'
+
+            db.session.commit()
+            if 'user_sid' in session:
+                emit('Transaction complete', room=session['user_sid'])
+    except:  # NOQA
+        print(f'There was an issue while mining {transaction}')
+
 
 # </editor-fold>
 

@@ -20,6 +20,7 @@ class Transfer(db.Model):
     from_amount = db.Column(db.Float, nullable=False)
     to_currency = db.Column(db.String, nullable=False)
     to_amount = db.Column(db.Float, nullable=False)
+    state = db.Column(db.String, nullable=False, default='Processing')
     date = db.Column(db.String, default=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
 
     def __repr__(self):
