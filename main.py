@@ -2,8 +2,9 @@
 
 import json
 from _operator import attrgetter
+from _thread import start_new_thread
 from datetime import datetime
-from multiprocessing import Process
+from multiprocessing import Process, Queue, Lock
 from random import randint
 from time import sleep
 from typing import Union
@@ -11,6 +12,7 @@ from typing import Union
 import jsonpickle
 from Crypto.Hash import keccak
 from flask import request, abort, session
+from flask_cors import cross_origin
 from flask_socketio import emit
 from pycoingecko import CoinGeckoAPI
 
@@ -20,7 +22,7 @@ from models.card import valid_card, Card
 from models.transactions import Deposit, Transfer, Send, Verification
 from models.user import User
 from models.wallet import Wallet
-from static.constants import CRYPTO_NAME_MAP
+from static.constants import CRYPTO_NAME_MAP, CRYPTO_NAME_MAP_REVERSED
 
 # </editor-fold>
 
@@ -44,6 +46,7 @@ except:  # NOQA
 
 
 @app.route('/user/login', methods=['POST'])
+@cross_origin()
 def login():
     data = parse_request_data(request.data)
     email, password = data['email'], data['password']
@@ -60,6 +63,7 @@ def login():
 
 
 @app.route('/user/logout', methods=['POST'])
+@cross_origin()
 def logout():
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -75,6 +79,7 @@ def logout():
 
 
 @app.route('/user/register', methods=['POST'])
+@cross_origin()
 def register():
     if check_login_status():
         abort(UNAUTHORISED)
@@ -110,6 +115,7 @@ def register():
 
 
 @app.route('/user/verify', methods=['PUT'])
+@cross_origin()
 def verify():
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -147,6 +153,7 @@ def verify():
 
 
 @app.route('/user/profile', methods=['PUT'])
+@cross_origin()
 def update_profile():
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -170,6 +177,7 @@ def update_profile():
 
 
 @app.route('/user/wallet', methods=['GET'])
+@cross_origin()
 def get_wallet():
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -188,6 +196,7 @@ def get_wallet():
 
 
 @app.route('/transaction/deposit', methods=['POST'])
+@cross_origin()
 def deposit():
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -201,19 +210,20 @@ def deposit():
         abort(BAD_REQUEST)
 
     # deposit funds
-    has_failed = deposit_funds(amount)
-    if has_failed:
+    has_succeded = deposit_funds(email, amount)
+    if not has_succeded:
         abort(BAD_REQUEST)
 
     # add transaction to db
-    deposit = create_deposit_transaction(amount)  # NOQA 3104
-    db.session.add(deposit)
+    transaction = create_deposit_transaction(amount)  # NOQA 3104
+    db.session.add(transaction)
 
     db.session.commit()
     return OK_RESPONSE()
 
 
 @app.route('/transaction/send', methods=['POST'])
+@cross_origin()
 def send():
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -229,11 +239,6 @@ def send():
             authenticate_email(email_receiver):  # can't send funds to self
         abort(BAD_REQUEST)
 
-    # send funds
-    has_failed = send_funds(email_receiver, currency, amount)
-    if has_failed:
-        abort(BAD_REQUEST)
-
     # add transaction to db
     transaction = create_send_transaction(email_receiver, currency, amount)
     db.session.add(transaction)
@@ -244,6 +249,7 @@ def send():
 
 
 @app.route('/transaction/transfer', methods=['POST'])
+@cross_origin()
 def transfer():
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -258,9 +264,7 @@ def transfer():
         abort(BAD_REQUEST)
 
     # transfer funds
-    has_failed, amount_to = transfer_funds(amount_from, currency_from, currency_to)
-    if has_failed:
-        abort(BAD_REQUEST)
+    amount_to = convert(currency_from, currency_to, amount_from)
 
     # add transaction to db
     transaction = create_transfer_transaction(amount_from, amount_to, currency_from, currency_to)
@@ -272,6 +276,7 @@ def transfer():
 
 
 @app.route('/transaction/history/<string:transaction_type>')
+@cross_origin()
 def history(transaction_type: str):
     if not check_login_status():
         abort(UNAUTHORISED)
@@ -295,6 +300,7 @@ def history(transaction_type: str):
 
 
 @app.route('/crypto')
+@cross_origin()
 def exchange_rate():
     return OK_RESPONSE(get_crypto_prices())
 
@@ -384,9 +390,9 @@ def get_logged_in_users_wallet() -> Wallet:
 def get_transaction(transaction_type: str, transaction_id: str) -> Union[Transfer, Send, None]:
     """Returns crypto related transaction based on its id"""
     if transaction_type == 'transfer':
-        return Transfer.query.filter_by(id=transaction_id)
+        return Transfer.query.filter_by(id=transaction_id).first()
     if transaction_type == 'send':
-        return Send.query.filter_by(id=transaction_id)
+        return Send.query.filter_by(id=transaction_id).first()
     else:
         return None
 
@@ -472,6 +478,16 @@ def check_user_exists(user_email: str) -> bool:
 # <editor-fold desc="General">
 
 
+def execute_transaction(transaction) -> bool:
+    """Executes the transaction at hand"""
+    if isinstance(transaction, Send):
+        return send_funds(transaction.sender, transaction.receiver, transaction.currency, transaction.amount)
+    if isinstance(transaction, Transfer):
+        return transfer_funds(transaction.user, transaction.from_amount, transaction.from_currency,
+                              transaction.to_currency)
+    return False
+
+
 def fetch_transactions(transaction_type: str):
     """Returns list of transactions of provided type"""
     user = get_logged_in_user()
@@ -538,18 +554,18 @@ def sort_transactions(transactions_list: list, request_data: dict):
 # <editor-fold desc="Deposit">
 
 
-def deposit_funds(amount: float) -> bool:
+def deposit_funds(user_email: str, amount: float) -> bool:
     """
     Deposits funds to logged-in user's wallet
-    :return: True if failed to deposit funds, else False
+    :return: False if failed to deposit funds, else True
     """
     try:
-        wallet: Wallet = get_logged_in_users_wallet()
+        wallet: Wallet = get_users_wallet(user_email)
         wallet.usd_balance += amount
 
-        return False
-    except:  # NOQA
         return True
+    except:  # NOQA
+        return False
 
 
 # noinspection PyTypeChecker
@@ -585,26 +601,28 @@ def filter_deposits(deposit_list, amount_lower, amount_upper):
 # <editor-fold desc="Send">
 
 
-def send_funds(email_receiver: str, currency: str, amount: float) -> bool:
+def send_funds(email_sender: str, email_receiver: str, currency: str, amount: float) -> bool:
     """
     Sends funds from one logged-in account to another
-    :return: True if failed to send funds, else False
+    :return: False if failed to send funds, else True
     """
     try:
-        wallet_sender: Wallet = get_logged_in_users_wallet()
+        wallet_sender: Wallet = get_users_wallet(email_sender)
         wallet_receiver: Wallet = get_users_wallet(email_receiver)
+
+        currency = CRYPTO_NAME_MAP_REVERSED[currency]
 
         # check if user has sufficient funds in that currency to send
         if wallet_sender.__getattribute__(currency) < amount:
-            return True
+            return False
 
         # equalize funds
         wallet_sender.__setattr__(currency, wallet_sender.__getattribute__(currency) - amount)
         wallet_receiver.__setattr__(currency, wallet_receiver.__getattribute__(currency) + amount)
 
-        return False
-    except:  # NOQA
         return True
+    except:  # NOQA
+        return False
 
 
 # noinspection PyTypeChecker
@@ -652,26 +670,29 @@ def filter_sends(send_list, sender, receiver, currency, amount_lower, amount_upp
 # <editor-fold desc="Transfer">
 
 
-def transfer_funds(amount_from: float, currency_from: str, currency_to: str) -> (bool, float):
+def transfer_funds(user_email: str, amount_from: float, currency_from: str, currency_to: str) -> (bool, float):
     """
     Transfer funds from one currency to another
-    :return: True if failed to transfer funds, else False
+    :return: False if failed to transfer funds, else True
     """
     try:
-        wallet: Wallet = get_logged_in_users_wallet()
+        wallet: Wallet = get_users_wallet(user_email)
+
+        currency_from = CRYPTO_NAME_MAP_REVERSED[currency_from]
+        currency_to = CRYPTO_NAME_MAP_REVERSED[currency_to]
 
         # check if user has sufficient funds in that currency to transfer
         if wallet.__getattribute__(currency_from) < amount_from:
-            return True, 0
+            return False
 
         # equalize funds
         amount_to = convert(currency_from, currency_to, amount_from)
         wallet.__setattr__(currency_from, wallet.__getattribute__(currency_from) - amount_from)
         wallet.__setattr__(currency_to, wallet.__getattribute__(currency_to) + amount_to)
 
-        return False, amount_to
+        return True
     except:  # NOQA
-        return True, 0
+        return False
 
 
 # noinspection PyTypeChecker
@@ -734,22 +755,26 @@ def handle_connect(sid: str) -> None:
 
 def start_mining_transaction(transaction_type: str, transaction_id: str) -> None:
     """Start the process of mining transaction"""
-    proc = Process(target=mine, args=(transaction_type, transaction_id,))
-    proc.start()
+    with app.app_context():
+        start_new_thread(mine, (transaction_type, transaction_id, session.get('user_sid', '')))
 
 
-def mine(transaction_type: str, transaction_id: str) -> None:
+def mine(transaction_type: str, transaction_id: str, user_sid: str = '') -> None:
     """Mine transaction and once done, notify client of the completion"""
     try:
         with app.app_context():
             sleep(MINING_TIME_IN_SECONDS)  # "Mine" for 5 minutes
 
             transaction = get_transaction(transaction_type, transaction_id)
-            transaction.state = 'Processed'
+            has_succeded = execute_transaction(transaction)
+            if has_succeded:
+                transaction.state = 'Valid'
+            else:
+                transaction.state = 'Invalid'
 
             db.session.commit()
-            if 'user_sid' in session:
-                emit('Transaction complete', room=session['user_sid'])
+            if user_sid != '':
+                emit('Transaction complete', room=user_sid)
     except:  # NOQA
         print(f'There was an issue while mining {transaction}')
 
@@ -758,6 +783,10 @@ def mine(transaction_type: str, transaction_id: str) -> None:
 
 
 # <editor-fold desc="Other">
+
+
+hashing_input_queue = Queue()  # Input queue for the hashing process
+hashing_output_queue = Queue()  # Output queue for the hashing process
 
 
 def parse_request_data(request_data) -> dict:
@@ -799,6 +828,21 @@ def hash_text(text: str) -> str:
 
 def get_hashed_transaction_id(user_1: str, user_2: str = '', amount='') -> str:
     """
+    Get generated random hash value for transactions
+    :param user_1: Email of user (sending user in the case of fund sending)
+    :param user_2: Email of receiving user in the case of fund sending
+    :param amount: Amount of funds being transferred in the case of a transfer
+    :return: Hash string which is meant to be used as the transaction ID
+    """
+    with Lock():
+        item = {'user_1': user_1, 'user_2': user_2, 'amount': amount}
+        hashing_input_queue.put(item)
+        hashed_item = hashing_output_queue.get(timeout=10)
+        return hashed_item
+
+
+def hash_transaction_id(user_1: str, user_2: str = '', amount='') -> str:
+    """
     Generate random hash value for transactions
     :param user_1: Email of user (sending user in the case of fund sending)
     :param user_2: Email of receiving user in the case of fund sending
@@ -807,6 +851,22 @@ def get_hashed_transaction_id(user_1: str, user_2: str = '', amount='') -> str:
     """
     random_value = randint(1, 100000000000)
     return hash_text(f'{user_1}{user_2}{amount}{random_value}')
+
+
+def hashing_process(input_queue: Queue, output_queue: Queue):
+    while True:
+        item = input_queue.get()
+        print(item)
+        processed_input = hash_transaction_id(item.get('user_1', ''),
+                                              item.get('user_2', ''),
+                                              item.get('amount', ''))
+        output_queue.put(processed_input)
+
+
+def start_hashing_process():
+    """Starts background process which serves for generating hashed transaction ids"""
+    process = Process(target=hashing_process, args=(hashing_input_queue, hashing_output_queue))
+    process.start()
 
 
 def get_crypto_prices() -> {str: {str: float}}:
@@ -849,4 +909,5 @@ def convert(currency_from: str, currency_to: str, amount: float) -> float:
 # </editor-fold>
 
 if __name__ == '__main__':
+    start_hashing_process()
     app.run(debug=True)

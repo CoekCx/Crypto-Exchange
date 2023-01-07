@@ -6,3 +6,12 @@ CRYPTO_NAME_MAP = {
     'tth_balance': 'Tether',
     'dog_balance': 'Dogecoin'
 }
+
+CRYPTO_NAME_MAP_REVERSED = {
+    'US Dollar': 'usd_balance',
+    'Bitcoin': 'btc_balance',
+    'Ethereum': 'eth_balance',
+    'XRP': 'xrp_balance',
+    'Tether': 'tth_balance',
+    'Dogecoin': 'dog_balance'
+}

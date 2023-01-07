@@ -1,6 +1,7 @@
 # <editor-fold desc="Imports">
 
 from flask import Flask
+from flask_cors import CORS
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -16,6 +17,7 @@ app.secret_key = 'hW7@56v5Le#LI$Vg'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data.db'  # set relative path to db
 db: SQLAlchemy = SQLAlchemy(app)  # initialise db with settings from app
 socketio = SocketIO(app)  # SocketIO server
+CORS(app=app)
 
 # </editor-fold>
 
